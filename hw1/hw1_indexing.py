@@ -44,14 +44,15 @@ def indexing(script_folder):
 
 def explore(script_folder):
     X, vectorizer = indexing(script_folder)
-
-    # most frequent word
     matrix_freq = np.asarray(X.sum(axis=0)).ravel()
     final_df = pd.DataFrame([matrix_freq], columns=np.array(vectorizer.get_feature_names()))
+
+    # most frequent word
     print(f'самое частотное слово: {final_df.idxmax(axis=1)[0]}, '
           f'{final_df[final_df.idxmax(axis=1)].values[0][0]} вхождений\n')
 
     # least frequent word
+    # first in alphabetical order (as in feature names)
     print(f'самое редкое слово: {final_df.idxmin(axis=1)[0]}, '
           f'{final_df[final_df.idxmin(axis=1)].values[0][0]} вхождений\n')
 
@@ -66,9 +67,8 @@ def explore(script_folder):
     for name in names.keys():
         total = 0
         for nickname in names[name]:
-            num = vectorizer.vocabulary_.get(morph.parse(nickname)[0].normal_form)
-            if num:
-                total += num
+            num = final_df[morph.parse(nickname)[0].normal_form][0]
+            total += num
         name_freqs[name] = total
     print(f'самое популярное имя: {max(name_freqs, key=name_freqs.get)} (включая варианты), '
           f'{name_freqs[max(name_freqs, key=name_freqs.get)]} вхождений')
