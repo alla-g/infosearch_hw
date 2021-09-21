@@ -1,6 +1,5 @@
 import os
 import warnings
-import re
 
 import nltk
 import pymorphy2
@@ -31,7 +30,7 @@ def index_corpus(script_folder):
     for root, dirs, files in os.walk(os.path.join(curr_dir, script_folder)):
         for file in files:
             filename = os.path.join(root, file)
-            filenames.append(re.sub(r'.+?- (.+?)\..+', r'\g<1>', file))
+            filenames.append(file.lstrip('Friends - '))
             with open(filename, encoding='utf-8-sig') as f:
                 text = f.read()
             corpus.append(preprocess(text))
