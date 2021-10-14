@@ -1,12 +1,12 @@
 import json
 import warnings
 import torch
+import torch.nn.functional as t
 
 import numpy as np
 import nltk
 import pymorphy2
 
-from string import digits
 from pprint import pprint
 from sklearn.preprocessing import normalize
 
@@ -23,14 +23,14 @@ def cls_pooling(model_output):
 
 def preprocess(text):
     tokens = [token for token in nltk.word_tokenize(text.lower())
-              if token.isalpha() or token in digits]
+              if token.isalpha()]
     lemmed_text = [morph.parse(word)[0].normal_form for word in tokens]
     return ' '.join(lemmed_text)
 
 
 def collect_answers(filename):
     with open(filename, 'r', encoding='UTF-8') as f:
-        data = list(f)[:50000]  # 50000
+        data = list(f)[:10000]  # 10000
     proc_corpus, raw_answers = [], []
     for question in data:
         item = json.loads(question)
@@ -79,8 +79,8 @@ def index_query_fasttext(proc_query, fasttext_model):
 
 
 def index_corpus_bert(raw_corpus):
-    bert_tokenizer = AutoTokenizer.from_pretrained("sberbank-ai/sbert_large_nlu_ru")
-    bert_model = AutoModel.from_pretrained("sberbank-ai/sbert_large_nlu_ru")
+    bert_tokenizer = AutoTokenizer.from_pretrained("cointegrated/rubert-tiny")
+    bert_model = AutoModel.from_pretrained("cointegrated/rubert-tiny")
 
     encoded_input = bert_tokenizer(raw_corpus, padding=True, truncation=True, max_length=24, return_tensors='pt')
     with torch.no_grad():
@@ -88,7 +88,7 @@ def index_corpus_bert(raw_corpus):
     matrix = cls_pooling(bert_model_output)
     model = {'bert_tokenizer': bert_tokenizer,
              'bert_model': bert_model}
-    matrix = normalize(matrix)
+    matrix = t.normalize(matrix)
 
     return matrix, model
 
@@ -98,7 +98,7 @@ def index_query_bert(raw_query, bert_tokenizer, bert_model):
     with torch.no_grad():
         bert_model_output = bert_model(**encoded_input)
     query_vector = cls_pooling(bert_model_output)
-    query_vector = normalize(query_vector)
+    query_vector = t.normalize(query_vector)
 
     return query_vector
 
@@ -148,4 +148,4 @@ def start(filename, vectorizer):
 
 if __name__ == '__main__':
     # 'fasttext' or 'bert'
-    start('questions_about_love.jsonl', 'fasttext')
+    start('questions_about_love.jsonl', 'bert')

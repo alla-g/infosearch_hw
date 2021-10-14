@@ -1,12 +1,12 @@
 import json
-import warnings
+import shutup
+shutup.please()
 
 import torch
 import numpy as np
 import nltk
 import pymorphy2
-
-from string import digits
+import torch.nn.functional as t
 from scipy import sparse
 
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -16,7 +16,6 @@ from sklearn.preprocessing import normalize
 from transformers import AutoTokenizer, AutoModel
 from gensim.models import KeyedVectors
 
-warnings.filterwarnings("ignore")
 morph = pymorphy2.MorphAnalyzer()
 
 
@@ -30,14 +29,14 @@ def cls_pooling(model_output):
 
 def preprocess(text):
     tokens = [token for token in nltk.word_tokenize(text.lower())
-              if token.isalpha() or token in digits]
+              if token.isalpha()]
     lemmed_text = [morph.parse(word)[0].normal_form for word in tokens]
     return ' '.join(lemmed_text)
 
 
 def collect_dataset(filename):
     with open(filename, 'r', encoding='UTF-8') as f:
-        data = list(f)[:50000]  # 50000
+        data = list(f)[:10000]  # 10000
     proc_answers, proc_questions = [], []
     raw_answers, raw_questions = [], []
 
@@ -161,14 +160,14 @@ def index_query_fasttext(proc_query, fasttext_model):
 
 
 def index_corpus_bert(raw_corpus):
-    bert_tokenizer = AutoTokenizer.from_pretrained("sberbank-ai/sbert_large_nlu_ru")
-    bert_model = AutoModel.from_pretrained("sberbank-ai/sbert_large_nlu_ru")
+    bert_tokenizer = AutoTokenizer.from_pretrained("cointegrated/rubert-tiny")
+    bert_model = AutoModel.from_pretrained("cointegrated/rubert-tiny")
 
     encoded_input = bert_tokenizer(raw_corpus, padding=True, truncation=True, max_length=24, return_tensors='pt')
     with torch.no_grad():
         bert_model_output = bert_model(**encoded_input)
     matrix = cls_pooling(bert_model_output)
-    matrix = normalize(matrix)
+    matrix = t.normalize(matrix)
     model = {'bert_tokenizer': bert_tokenizer,
              'bert_model': bert_model}
 
@@ -180,7 +179,7 @@ def index_query_bert(raw_query, bert_tokenizer, bert_model):
     with torch.no_grad():
         bert_model_output = bert_model(**encoded_input)
     query_matrix = cls_pooling(bert_model_output)
-    query_matrix = normalize(query_matrix)
+    query_matrix = t.normalize(query_matrix)
 
     return query_matrix
 
@@ -208,7 +207,7 @@ def metric_cv(proc_questions, proc_answers):
     questions_matrix = index_query_cv(proc_questions, c_vectorizer)
 
     # умножить матрицу на матрицу
-    scores = count_sim(answers_matrix, questions_matrix)
+    scores = count_sim_sparse(answers_matrix, questions_matrix)
 
     # сортировка и подсчёт
     score = 0
@@ -222,20 +221,12 @@ def metric_cv(proc_questions, proc_answers):
 
 
 def metric_tfidf(proc_questions, proc_answers):
-    # проиндексировать корпус
     answers_matrix, tfidf_vectorizer = index_corpus_tfidf(proc_answers)
-
-    # проиндексировать запросы
     questions_matrix = index_query_tfidf(proc_questions, tfidf_vectorizer)
-
-    # умножить матрицу на матрицу
     scores = count_sim_sparse(answers_matrix, questions_matrix)
 
-    # сортировка и подсчёт
     score = 0
     for idx, row in enumerate(scores):
-        # n-ной строке должен соответствовать n-ный столбец,
-        # т.к. одинаковое кол-во вопросов и ответов
         if idx in order(row)[:5]:
             score += 1
 
@@ -243,20 +234,12 @@ def metric_tfidf(proc_questions, proc_answers):
 
 
 def metric_bm25(proc_questions, proc_answers):
-    # проиндексировать корпус
     answers_matrix, c_vectorizer = index_corpus_bm25(proc_answers)
-
-    # проиндексировать запросы
     questions_matrix = index_query_bm25(proc_questions, c_vectorizer)
-
-    # умножить матрицу на матрицу
     scores = count_sim_sparse(answers_matrix, questions_matrix)
 
-    # сортировка и подсчёт
     score = 0
     for idx, row in enumerate(scores):
-        # n-ной строке должен соответствовать n-ный столбец,
-        # т.к. одинаковое кол-во вопросов и ответов
         if idx in order(row)[:5]:
             score += 1
 
@@ -264,20 +247,12 @@ def metric_bm25(proc_questions, proc_answers):
 
 
 def metric_fasttext(proc_questions, proc_answers):
-    # проиндексировать корпус
     answers_matrix, fasttext_model = index_corpus_fasttext(proc_answers)
-
-    # проиндексировать запросы
     questions_matrix = index_query_fasttext(proc_questions, fasttext_model)
-
-    # умножить матрицу на матрицу
     scores = count_sim(answers_matrix, questions_matrix)
 
-    # сортировка и подсчёт
     score = 0
     for idx, row in enumerate(scores):
-        # n-ной строке должен соответствовать n-ный столбец,
-        # т.к. одинаковое кол-во вопросов и ответов
         if idx in order(row)[:5]:
             score += 1
 
@@ -285,20 +260,12 @@ def metric_fasttext(proc_questions, proc_answers):
 
 
 def metric_bert(raw_questions, raw_answers):
-    # проиндексировать корпус
     answers_matrix, bert_model = index_corpus_bert(raw_answers)
-
-    # проиндексировать запросы
     questions_matrix = index_query_bert(raw_questions, **bert_model)
-
-    # умножить матрицу на матрицу
     scores = count_sim(answers_matrix, questions_matrix)
 
-    # сортировка и подсчёт
     score = 0
     for idx, row in enumerate(scores):
-        # n-ной строке должен соответствовать n-ный столбец,
-        # т.к. одинаковое кол-во вопросов и ответов
         if idx in order(row)[:5]:
             score += 1
 
